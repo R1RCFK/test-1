@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audiologist Helper</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen py-8 px-4">
+
+    <div id="app" class="max-w-md mx-auto bg-white rounded-3xl shadow-xl overflow-hidden">
+        <div class="p-6">
+            <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">聽力學遮蔽計算</h1>
+
+            <!-- 模式切換 -->
+            <div class="flex bg-gray-100 rounded-xl p-1 mb-6">
+                <button onclick="setMode('pta')" id="tab-pta" class="flex-1 py-2 rounded-lg font-medium transition-all bg-white shadow-sm">PTA</button>
+                <button onclick="setMode('speech')" id="tab-speech" class="flex-1 py-2 rounded-lg font-medium transition-all text-gray-500">Speech</button>
+            </div>
+
+            <!-- 計算內容區域 -->
+            <div id="content" class="space-y-4">
+                <!-- 內容會由 JavaScript 動態生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let state = {
+            mode: 'pta',
+            values: { teAC: 0, teBC: 0, nteAC: 0, nteBC: 0, teSRT: 0, nteABG: 0, teBCBest: 0 },
+            transducer: 'insert'
+        };
+
+        function setMode(mode) {
+            state.mode = mode;
+            document.getElementById('tab-pta').className = `flex-1 py-2 rounded-lg font-medium transition-all ${mode === 'pta' ? 'bg-white shadow-sm' : 'text-gray-500'}`;
+            document.getElementById('tab-speech').className = `flex-1 py-2 rounded-lg font-medium transition-all ${mode === 'speech' ? 'bg-white shadow-sm' : 'text-gray-500'}`;
+            render();
+        }
+
+        function render() {
+            const container = document.getElementById('content');
+            if (state.mode === 'pta') {
+                container.innerHTML = `
+                    <div class="space-y-4">
+                        <select onchange="state.transducer=this.value; render()" class="w-full p-3 border rounded-xl bg-gray-50">
+                            <option value="insert">Insert Earphones</option>
+                            <option value="headphones">Headphones</option>
+                        </select>
+                        <div class="grid grid-cols-2 gap-3">
+                            ${['teAC', 'teBC', 'nteAC', 'nteBC'].map(k => `
+                                <div>
+                                    <label class="text-xs font-bold text-gray-400 uppercase">${k}</label>
+                                    <input type="number" oninput="state.values.${k}=Number(this.value); renderResults()" class="w-full p-3 border rounded-xl" value="${state.values[k]}">
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div id="results" class="bg-blue-50 p-4 rounded-xl text-blue-800 text-sm"></div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `<div class="p-8 text-center text-gray-400">Speech 模式開發中...</div>`;
+            }
+            renderResults();
+        }
+
+        function renderResults() {
+            if (state.mode !== 'pta') return;
+            const { teAC, teBC, nteAC, nteBC } = state.values;
+            const abg = Math.max(0, nteAC - nteBC);
+            const factor = state.transducer === 'insert' ? 45 : 30;
+            const acMax = (state.transducer === 'insert' ? teBC + 50 : teBC + 35);
+            const acMin = teAC + 20 + abg - factor;
+            
+            document.getElementById('results').innerHTML = `
+                <div class="font-bold mb-2">計算結果:</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>AC Max: <b>${acMax} dB</b></div>
+                    <div>AC Min: <b>${acMin} dB</b></div>
+                </div>
+            `;
+        }
+
+        render();
+    </script>
+</body>
+</html>

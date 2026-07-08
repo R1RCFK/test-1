@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audiologist Helper</title>
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -24,17 +23,16 @@
             </div>
 
             <!-- 計算內容區域 -->
-            <div id="content" class="space-y-4">
-                <!-- 內容會由 JavaScript 動態生成 -->
-            </div>
+            <div id="content" class="space-y-4"></div>
         </div>
     </div>
 
     <script>
         let state = {
             mode: 'pta',
-            values: { teAC: 0, teBC: 0, nteAC: 0, nteBC: 0, teSRT: 0, nteABG: 0, teBCBest: 0 },
-            transducer: 'insert'
+            transducer: 'insert', // insert: IA=55, headphones: IA=40
+            pta: { teAC: 0, teBC: 0, nteAC: 0, nteBC: 0 },
+            speech: { presentationLevel: 0, nteBestBC: 0 }
         };
 
         function setMode(mode) {
@@ -46,45 +44,72 @@
 
         function render() {
             const container = document.getElementById('content');
+            
+            // 轉接器選擇 (通用)
+            let transducerHtml = `
+                <select onchange="state.transducer=this.value; render()" class="w-full p-3 border rounded-xl bg-gray-50 mb-4">
+                    <option value="insert" ${state.transducer==='insert'?'selected':''}>Insert Earphones (IA=55dB)</option>
+                    <option value="headphones" ${state.transducer==='headphones'?'selected':''}>Headphones (IA=40dB)</option>
+                </select>
+            `;
+
             if (state.mode === 'pta') {
                 container.innerHTML = `
-                    <div class="space-y-4">
-                        <select onchange="state.transducer=this.value; render()" class="w-full p-3 border rounded-xl bg-gray-50">
-                            <option value="insert">Insert Earphones</option>
-                            <option value="headphones">Headphones</option>
-                        </select>
-                        <div class="grid grid-cols-2 gap-3">
-                            ${['teAC', 'teBC', 'nteAC', 'nteBC'].map(k => `
-                                <div>
-                                    <label class="text-xs font-bold text-gray-400 uppercase">${k}</label>
-                                    <input type="number" oninput="state.values.${k}=Number(this.value); renderResults()" class="w-full p-3 border rounded-xl" value="${state.values[k]}">
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div id="results" class="bg-blue-50 p-4 rounded-xl text-blue-800 text-sm"></div>
+                    ${transducerHtml}
+                    <div class="grid grid-cols-2 gap-3">
+                        ${['teAC', 'teBC', 'nteAC', 'nteBC'].map(k => `
+                            <div>
+                                <label class="text-xs font-bold text-gray-400 uppercase">${k}</label>
+                                <input type="number" oninput="state.pta.${k}=Number(this.value); renderResults()" class="w-full p-3 border rounded-xl" value="${state.pta[k]}">
+                            </div>
+                        `).join('')}
                     </div>
+                    <div id="results" class="bg-blue-50 p-4 rounded-xl text-blue-800 text-sm"></div>
                 `;
             } else {
-                container.innerHTML = `<div class="p-8 text-center text-gray-400">Speech 模式開發中...</div>`;
+                container.innerHTML = `
+                    ${transducerHtml}
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 uppercase">Speech Presentation Level (dB HL)</label>
+                            <input type="number" oninput="state.speech.presentationLevel=Number(this.value); renderResults()" class="w-full p-3 border rounded-xl" value="${state.speech.presentationLevel}">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 uppercase">NTE Best BC (dB HL)</label>
+                            <input type="number" oninput="state.speech.nteBestBC=Number(this.value); renderResults()" class="w-full p-3 border rounded-xl" value="${state.speech.nteBestBC}">
+                        </div>
+                    </div>
+                    <div id="results" class="bg-purple-50 p-4 rounded-xl text-purple-800 text-sm"></div>
+                `;
             }
             renderResults();
         }
 
         function renderResults() {
-            if (state.mode !== 'pta') return;
-            const { teAC, teBC, nteAC, nteBC } = state.values;
-            const abg = Math.max(0, nteAC - nteBC);
-            const factor = state.transducer === 'insert' ? 45 : 30;
-            const acMax = (state.transducer === 'insert' ? teBC + 50 : teBC + 35);
-            const acMin = teAC + 20 + abg - factor;
-            
-            document.getElementById('results').innerHTML = `
-                <div class="font-bold mb-2">計算結果:</div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div>AC Max: <b>${acMax} dB</b></div>
-                    <div>AC Min: <b>${acMin} dB</b></div>
-                </div>
-            `;
+            const resultsDiv = document.getElementById('results');
+            const ia = state.transducer === 'insert' ? 55 : 40;
+
+            if (state.mode === 'pta') {
+                const { teAC, teBC, nteAC, nteBC } = state.pta;
+                const abgNTE = Math.max(0, nteAC - nteBC);
+                const acMax = teBC + ia; // Simplified
+                const acMin = teAC - ia + abgNTE;
+                resultsDiv.innerHTML = `
+                    <div class="font-bold mb-2">PTA 計算結果:</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>Max Masking: <b>${Math.max(0, acMax)} dB</b></div>
+                        <div>Min Masking: <b>${Math.max(0, acMin)} dB</b></div>
+                    </div>
+                `;
+            } else {
+                // Speech Masking: Presentation Level - IA + NTE BC
+                const needed = state.speech.presentationLevel - ia + state.speech.nteBestBC;
+                resultsDiv.innerHTML = `
+                    <div class="font-bold mb-2">Speech Masking 計算結果:</div>
+                    <div>建議遮蔽音量: <b class="text-lg">${Math.max(0, needed)} dB EM</b></div>
+                    <p class="text-xs mt-2 opacity-70">*公式: Presentation Level - IA + NTE Best BC</p>
+                `;
+            }
         }
 
         render();
